@@ -1,7 +1,7 @@
 <div class="row col-md-8 col-md-offset-2">
   <h1><%= @chatroom.topic %></h1>
 
-<div class="panel panel-default">
+<!-- <div class="panel panel-default">
   <% if @chatroom.messages.any? %>
     <div class="panel-body" id="messages">
       <%= render partial: 'messages/message', collection: @chatroom.messages%>
@@ -11,7 +11,210 @@
     </div>
   <%end%>
 </div>
-
-
-  <%= render partial: 'messages/message_form', locals: {message: @message, chatroom: @chatroom}%>
+ -->
+<!-- 
+  <%= render partial: 'messages/message_form', locals: {message: @message, chatroom: @chatroom}%> 
+  -->
 </div>
+
+ <div id="header">
+    <button type='button' id='random'>Randomize Data</button>
+    <button type='button' id="add">Add Data</button>
+    <button type='button' id="remove">Remove Data</button>
+    <input type="reset">
+</div>
+
+
+<script src="http://d3js.org/d3.v3.min.js"></script>
+
+<script type="text/javascript">
+  var dataset = [];
+  var w = 600;
+  var h = 250;
+
+//Create SVG element
+  var svg = d3.select("body")
+      .append("svg")
+      .attr("width", w)
+      .attr("height", h);
+
+  var xScale = d3.scale.ordinal()
+      .domain(d3.range(dataset.length))
+      .rangeRoundBands([0, w], 0.05);
+
+  var yScale = d3.scale.linear()
+      .domain([0, d3.max(dataset, function(d) {
+          return d.value;
+      })])
+      .range([0, h]);
+
+  //Define key function, to be used when binding data
+  var key = function(d) {
+      return d.key;
+  };
+
+  App.messages = App.cable.subscriptions.create('MessagesChannel', {  
+    received: function(data) {
+      dataset.push({
+        key: data.key,
+        value: data.value
+      });
+      updateBarChart("add");
+    }
+  });
+
+  var updateBarChart = function(operation){
+    //Decide what to do next
+    if (operation == "add") {
+      // it seems nothing is needed 
+    } else if (operation == 'remove') {
+        dataset.shift(); //Remove one value from dataset
+    }
+
+    //Update scale domains
+    xScale.domain(d3.range(dataset.length));
+    yScale.domain([0, d3.max(dataset, function(d) {
+        return d.value;
+    })]);
+
+    //Select…
+    var bars = svg.selectAll("rect").data(dataset, key);
+
+    //Enter…
+    bars.enter()
+        .append("rect")
+        // .attr("x", w)
+        // .attr("y", function(d) {
+        //     return h - yScale(d.value);
+        // })
+        // .attr("width", xScale.rangeBand())
+        // .attr("height", function(d) {
+        //     return yScale(d.value);
+        // })
+        .attr("fill", function(d) {
+            return "rgb(94,243, " + (d.value * 10) + ")";
+        })
+    .on('mouseover', function() {
+        d3.select(this)
+            .attr('fill', 'orange');
+    })
+    .on('mouseout', function(d) {
+        d3.select(this)
+            .transition()
+            .duration(250)
+            .attr("fill", "rgb(225, 0, " + (d.value * 10) + ")");
+    });
+
+    // //Update…
+    bars.transition()
+        .duration(500)
+        .attr("x", function(d, i) {
+            return xScale(i);
+        })
+        .attr("y", function(d) {
+            return h - yScale(d.value);
+        })
+        .attr("width", xScale.rangeBand())
+        .attr("height", function(d) {
+            return yScale(d.value);
+        });
+
+    //Exit…
+    bars.exit()
+        .transition()
+        .duration(500)
+        .attr("x", -xScale.rangeBand())
+        .remove();
+
+    //Update all labels
+    //Select…
+    var labels = svg.selectAll("text")
+        .data(dataset, key);
+
+    //Enter…
+    labels.enter()
+        .append("text")
+        .text(function(d) {
+            return d.value;
+        })
+        .attr("text-anchor", "middle")
+        .attr("x", w)
+        .attr("y", function(d) {
+            return h - yScale(d.value) + 14;
+        })
+        .attr("font-family", "sans-serif")
+        .attr("font-size", "11px")
+        .attr("fill", "white");
+
+    //Update…
+    labels.transition()
+        .duration(500)
+        .attr("x", function(d, i) {
+            return xScale(i) + xScale.rangeBand() / 2;
+        })
+        .attr('y', function(d) {
+            return h - yScale(d.value) + 14;
+        });
+    //Exit…
+    labels.exit()
+        .transition()
+        .duration(500)
+        .attr("x", -xScale.rangeBand())
+        .remove();
+  };
+
+  var generateBarChart = function(dataset){
+    //Create bars
+    svg.selectAll("rect")
+        .data(dataset, key)
+        .enter()
+        .append("rect")
+        .attr("x", function(d, i) {
+            return xScale(i);
+        })
+        .attr("y", function(d) {
+            return h - yScale(d.value);
+        })
+        .attr("width", xScale.rangeBand())
+        .attr("height", function(d) {
+            return yScale(d.value);
+        })
+        .attr("fill", function(d) {
+            return "rgb(225, 0, " + (d.value * 10) + ")";
+        })
+    //On mouseover
+    .on('mouseover', function() {
+        d3.select(this)
+            .attr('fill', 'orange');
+    })
+
+    .on('mouseout', function(d) {
+        d3.select(this)
+            .transition()
+            .duration(250)
+            .attr("fill", "rgb(225, 0, " + (d.value * 10) + ")");
+    });
+
+    //Create labels
+    svg.selectAll("text")
+        .data(dataset, key)
+        .enter()
+        .append("text")
+        .text(function(d) {
+            return d.value;
+        })
+        .attr("text-anchor", "middle")
+        .attr("x", function(d, i) {
+            return xScale(i) + xScale.rangeBand() / 2;
+        })
+        .attr("y", function(d) {
+            return h - yScale(d.value) + 14;
+        })
+        .attr("font-family", "sans-serif")
+        .attr("font-size", "11px")
+        .attr("fill", "white");
+  };
+
+
+  generateBarChart(dataset);
+</script>
