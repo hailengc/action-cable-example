@@ -17,51 +17,130 @@
   -->
 </div>
 
- <div id="header">
-    <button type='button' id='random'>Randomize Data</button>
-    <button type='button' id="add">Add Data</button>
-    <button type='button' id="remove">Remove Data</button>
-    <input type="reset">
+<style type="text/css">
+  #ttContent {
+    min-width: 50px;
+    min-height: 30px;
+    visibility: hidden;
+    background-color: black;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    padding: 5px;
+
+    position: absolute;
+    left: 200px;
+    top: 200px;
+    /*z-index: 9999999;*/
+    z-index: 0;
+  }
+
+  body{
+    text-align: center;
+  }
+</style>
+
+<div id="tt"  >
+  <span id="ttContent">
+  </span>
 </div>
 
 
-<script src="http://d3js.org/d3.v3.min.js"></script>
-
+<!-- <script src="http://d3js.org/d3.v3.min.js"></script> -->
 <script type="text/javascript">
-  var dataset = [];
-  var w = 600;
-  var h = 250;
+  // custome toFix function:
+  // inspired by: http://stackoverflow.com/questions/661562/how-to-format-a-float-in-javascript
+  var toFix = function(value, precision){
+    var power = Math.pow(10, precision || 0);
+    return Math.round(value * power) / power;
+  };
 
-//Create SVG element
+  // get random value in [a, b)
+  var rangeRandom = function(a, b){
+    var range = b - a;
+    var randomValue =  Math.random()*range + a;
+    return toFix(randomValue, 2);
+  };
+
+  //
+  var modHSLA = function(hsla, modH, modS, modL, modA){
+    //remove all whitespace in the string
+    hsla = hsla.replace(/\s/g, '');
+
+    var match = hsla.match(/\d+/g);
+    var h = +match[0],
+        s = +match[1],
+        l = +match[2];
+
+    var a = +hsla.split(",")[3].match(/(.+)\)$/)[1];
+    h += modH;
+    s += modS;
+    l += modL;
+    a += modA;
+
+    return "hsla(" + h + ","  
+            + s + "%,"
+            + l + "%,"
+            + a +")";
+  }
+
+  var dataset =  (function(){
+    var size = 1;
+    var set = [];
+
+    for(var i= 0; i<size; i++){
+      var detail = {
+        phraseA: rangeRandom(0.0001, 30.0),
+        phraseB: rangeRandom(0.0001, 30.0),
+        phraseC: rangeRandom(0.0001, 30.0),
+        phraseD: rangeRandom(0.0001, 30.0),
+      };
+
+      var sum = 0.0;
+      for (var key in detail){
+        sum += detail[key];
+      }
+
+      set.push({
+        key: i,
+        sum: sum,
+        detail: detail
+      });
+    }
+
+    return set;
+  })();
+
+  var w = 1600;
+  var h = 600;
+
+  //Create SVG element
   var svg = d3.select("body")
       .append("svg")
       .attr("width", w)
       .attr("height", h);
 
+  //Create d3 linear scales
   var xScale = d3.scale.ordinal()
       .domain(d3.range(dataset.length))
       .rangeRoundBands([0, w], 0.05);
 
   var yScale = d3.scale.linear()
       .domain([0, d3.max(dataset, function(d) {
-          return d.value;
+          return d.sum;
       })])
       .range([0, h]);
+
+  var hueScale = d3.scale.linear()
+      .domain([0, d3.max(dataset, function(d){
+        return d.sum;
+      })])
+      .range([100, 0]);
 
   //Define key function, to be used when binding data
   var key = function(d) {
       return d.key;
   };
-
-  App.messages = App.cable.subscriptions.create('MessagesChannel', {  
-    received: function(data) {
-      dataset.push({
-        key: data.key,
-        value: data.value
-      });
-      updateBarChart("add");
-    }
-  });
 
   var updateBarChart = function(operation){
     //Decide what to do next
@@ -83,20 +162,14 @@
     //Enter…
     bars.enter()
         .append("rect")
-        // .attr("x", w)
-        // .attr("y", function(d) {
-        //     return h - yScale(d.value);
-        // })
-        // .attr("width", xScale.rangeBand())
-        // .attr("height", function(d) {
-        //     return yScale(d.value);
-        // })
         .attr("fill", function(d) {
             return "rgb(94,243, " + (d.value * 10) + ")";
         })
     .on('mouseover', function() {
         d3.select(this)
-            .attr('fill', 'orange');
+            .attr('fill', 'orange')
+            .style('cursor', 'pointer');
+
     })
     .on('mouseout', function(d) {
         d3.select(this)
@@ -165,38 +238,103 @@
 
   var generateBarChart = function(dataset){
     //Create bars
-    svg.selectAll("rect")
-        .data(dataset, key)
-        .enter()
-        .append("rect")
-        .attr("x", function(d, i) {
-            return xScale(i);
-        })
-        .attr("y", function(d) {
-            return h - yScale(d.value);
-        })
-        .attr("width", xScale.rangeBand())
-        .attr("height", function(d) {
-            return yScale(d.value);
-        })
-        .attr("fill", function(d) {
-            return "rgb(225, 0, " + (d.value * 10) + ")";
-        })
-    //On mouseover
+    // svg.selectAll("rect")
+    //     .data(dataset, key)
+    //     .enter()
+    //     .append("rect")
+    //     .attr("x", function(d, i) {
+    //         return xScale(i);
+    //     })
+    //     .attr("y", function(d) {
+    //         return h - yScale(d.sum);
+    //     })
+    //     .attr("width", xScale.rangeBand())
+    //     .attr("height", function(d) {
+    //         return yScale(d.sum);
+    //     })
+    //     .attr("fill", function(d) {
+    //         // return "hsl(" + hueScale(d.sum) + ", 100%, 55%)";
+    //         return "hsla(240, 50%, 77%, 1)";
+    //     })
+
+    var rectGroup = svg.selectAll("g")
+      .data(dataset, key)
+      .enter()
+      .append("g");
+
+    rectGroup.selectAll("rect")
+      .data(function(d){
+        var detail =  d.detail;
+        var phrases = [];
+        for (var key in detail){
+          phrases.push(detail[key]);
+        }
+        return phrases;
+      })
+      .enter()
+      .append("rect")
+      .attr("x", function(d, i) {
+          var parentData = d3.select(this.parentNode).datum();
+          return xScale(parentData.key);
+      })
+      .attr("width", xScale.rangeBand())
+      .attr("height", function(d) {
+          var parentData = d3.select(this.parentNode).datum();
+          var totalHeight = yScale(parentData.sum);
+          return (d / parentData.sum)*totalHeight;
+      })
+      .attr("y", function(d) {
+          var parentData = d3.select(this.parentNode).datum();
+           // record all slice height into parentData
+          parentData.slicesHeight = parentData.slicesHeight || 0;
+          var yPosition =  h - yScale(parentData.sum) + parentData.slicesHeight;
+          parentData.slicesHeight += +d3.select(this).attr("height");
+          return yPosition;
+      })
+      .attr("fill", function(d, i) {
+          // return "hsl(" + hueScale(d.sum) + ", 100%, 55%)";
+          return "hsla(" + i*90 + ", 60%, 50%, 1)";
+      })
+
+    // On mouseover
     .on('mouseover', function() {
-        d3.select(this)
-            .attr('fill', 'orange');
+        // highlight this rect only
+        // var fill = d3.select(this).attr('fill');
+
+        // grey all other rects
+        var allRects = svg.selectAll("rect");
+        allRects.attr('fill', function(d){
+          var hlsaOrigin = d3.select(this).attr("fill");
+          return modHSLA(hlsaOrigin,0, -20,0,0);
+        });
+
+
+        d3.select("#ttContent")
+          .style('left', d3.event.pageX + "px")
+          .style('top', d3.event.pageY + 20 + "px")
+          .style('visibility', 'visible')
+          .text(JSON.stringify(d3.select(this).data()));
     })
 
     .on('mouseout', function(d) {
-        d3.select(this)
-            .transition()
-            .duration(250)
-            .attr("fill", "rgb(225, 0, " + (d.value * 10) + ")");
+        // d3.select(this)
+        //     .transition()
+        //     .duration(250)
+        //     .attr("fill", function(d){
+        //       return "hsl(" + hueScale(d.sum) + ", 100%, 55%)";
+        //     });
+
+        d3.selectAll("rect")
+        .attr("fill", function(d) {
+          return "hsla(240, 50%, 77%, 1)";
+        })
+
+
+        d3.select("#ttContent").style("visibility", "hidden");
     });
 
     //Create labels
-    svg.selectAll("text")
+ /*   svg.selectAll("text")
         .data(dataset, key)
         .enter()
         .append("text")
@@ -212,9 +350,65 @@
         })
         .attr("font-family", "sans-serif")
         .attr("font-size", "11px")
-        .attr("fill", "white");
+        .attr("fill", "white");*/
   };
 
+  var drawPieChart = function(data){
+    var m = 10,
+    r = 200,
+    z = d3.scale.category20c(),
+    data = [[11975,  5871, 8916, 2868]];
+
+    d3.select("body")
+      .append("svg")
+      .attr("width", (r + m) * 2 )
+      .attr("height", (r + m) * 2 )
+      .append("g")
+      .data(data)
+      .attr("transform", "translate(" + (r + m) + "," + (r + m) + ")")
+      .selectAll("path")
+      .data(d3.layout.pie())
+      .enter().append("path")
+      .attr("d", d3.svg.arc().innerRadius(0).outerRadius(r))
+      .style("fill", function(d, i) { 
+        return z(i); 
+      })
+      //mouse enter event
+      .on('mouseover', function(d, i) {
+        d3.select(this)
+          .style('fill', 'orange')
+          .style('cursor', 'pointer');
+
+        d3.select("#ttContent")
+          .style('left', d3.event.pageX + "px")
+          .style('top', d3.event.pageY + 8 + "px")
+          .style('visibility', 'visible')
+          .text(JSON.stringify(d3.select(this).data()));
+      })
+      // mouse out event
+      .on('mouseout', function(d, i) {
+        d3.select(this)
+            .transition()
+            .duration(250)
+            .style("fill", function() { 
+              return z(i); 
+            });
+
+        d3.select("#ttContent").style("visibility", "hidden");
+      });
+
+  }
+
+  App.messages = App.cable.subscriptions.create('MessagesChannel', {  
+    received: function(data) {
+      dataset.push({
+        key: data.key,
+        value: data.value
+      });
+      updateBarChart("add");
+    }
+  });
 
   generateBarChart(dataset);
+  drawPieChart();
 </script>
