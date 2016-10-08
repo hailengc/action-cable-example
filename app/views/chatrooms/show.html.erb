@@ -48,8 +48,8 @@
 
 <!-- <script src="http://d3js.org/d3.v3.min.js"></script> -->
 <script type="text/javascript">
-  // custome toFix function:
-  // inspired by: http://stackoverflow.com/questions/661562/how-to-format-a-float-in-javascript
+  // customize toFix function:
+  // reference: http://stackoverflow.com/questions/661562/how-to-format-a-float-in-javascript
   var toFix = function(value, precision){
     var power = Math.pow(10, precision || 0);
     return Math.round(value * power) / power;
@@ -62,7 +62,7 @@
     return toFix(randomValue, 2);
   };
 
-  //
+  // modify the hlsa component values
   var modHSLA = function(hsla, modH, modS, modL, modA){
     //remove all whitespace in the string
     hsla = hsla.replace(/\s/g, '');
@@ -82,10 +82,10 @@
             + s + "%,"
             + l + "%,"
             + a +")";
-  }
+  };
 
   var dataset =  (function(){
-    var size = 1;
+    var size = 10;
     var set = [];
 
     for(var i= 0; i<size; i++){
@@ -111,14 +111,25 @@
     return set;
   })();
 
-  var w = 1600;
-  var h = 600;
-
-  //Create SVG element
+  var w = 1600, h = 600;
+  //Create bar chart svg
   var svg = d3.select("body")
       .append("svg")
       .attr("width", w)
-      .attr("height", h);
+      .attr("height", h)
+      .attr("id", "bcSvg");
+
+  // Create pie chart svg
+  var m = 10, r = 200;
+  var pcSvg = d3.select("body")
+      .append("svg")
+      .attr("id", "pcSvg")
+      .attr("width", (r + m) * 2 )
+      .attr("height", (r + m) * 2 )
+      .append("g")
+      .attr("transform", "translate(" + (r + m) + "," + (r + m) + ")");
+
+  var hlBarNode = null;
 
   //Create d3 linear scales
   var xScale = d3.scale.ordinal()
@@ -237,32 +248,12 @@
   };
 
   var generateBarChart = function(dataset){
-    //Create bars
-    // svg.selectAll("rect")
-    //     .data(dataset, key)
-    //     .enter()
-    //     .append("rect")
-    //     .attr("x", function(d, i) {
-    //         return xScale(i);
-    //     })
-    //     .attr("y", function(d) {
-    //         return h - yScale(d.sum);
-    //     })
-    //     .attr("width", xScale.rangeBand())
-    //     .attr("height", function(d) {
-    //         return yScale(d.sum);
-    //     })
-    //     .attr("fill", function(d) {
-    //         // return "hsl(" + hueScale(d.sum) + ", 100%, 55%)";
-    //         return "hsla(240, 50%, 77%, 1)";
-    //     })
-
-    var rectGroup = svg.selectAll("g")
+    var bar = svg.selectAll("g")
       .data(dataset, key)
       .enter()
       .append("g");
 
-    rectGroup.selectAll("rect")
+    bar.selectAll("rect")
       .data(function(d){
         var detail =  d.detail;
         var phrases = [];
@@ -293,30 +284,42 @@
       })
       .attr("fill", function(d, i) {
           // return "hsl(" + hueScale(d.sum) + ", 100%, 55%)";
-          return "hsla(" + i*90 + ", 60%, 50%, 1)";
+          // set the color data
+          var hsla = "hsla(" + i*90 + ", 60%, 50%, 1)";
+          d3.select(this).attr('orgHsla', hsla);
+          return hsla;
       })
-
-    // On mouseover
+    .on('mousemove', function(){
+        d3.select("#ttContent")
+          .style('left', d3.event.pageX + "px")
+          .style('top', d3.event.pageY + 20 + "px");
+    })
     .on('mouseover', function() {
-        // highlight this rect only
-        // var fill = d3.select(this).attr('fill');
-
-        // grey all other rects
-        var allRects = svg.selectAll("rect");
-        allRects.attr('fill', function(d){
-          var hlsaOrigin = d3.select(this).attr("fill");
-          return modHSLA(hlsaOrigin,0, -20,0,0);
-        });
-
-
+        // show the data tip
+        var that = this;
         d3.select("#ttContent")
           .style('left', d3.event.pageX + "px")
           .style('top', d3.event.pageY + 20 + "px")
           .style('visibility', 'visible')
-          .text(JSON.stringify(d3.select(this).data()));
-    })
+          .html(function(){
+            var rectData = d3.select(that).datum();
+            var barData = d3.select(that.parentNode).datum();
+            var pMessage1 = toFix(rectData, 2) + "/" + toFix(barData.sum, 2);
+            var pMessage2 = toFix(rectData/barData.sum * 100, 2) + "%";
+            return "total: " + toFix(barData.sum, 2) + "<br>" 
+                    + pMessage1 + "<br>" 
+                    + pMessage2;
+          }());
 
-    .on('mouseout', function(d) {
+        try {
+          if (d3.event.fromElement.parentNode === d3.event.toElement.parentNode){
+            d3.event.stopPropagation();
+          }
+        }catch(ex){
+          d3.event.stopPropagation();
+        }
+    })
+    .on('mouseout', function() {
         // d3.select(this)
         //     .transition()
         //     .duration(250)
@@ -324,13 +327,39 @@
         //       return "hsl(" + hueScale(d.sum) + ", 100%, 55%)";
         //     });
 
-        d3.selectAll("rect")
-        .attr("fill", function(d) {
-          return "hsla(240, 50%, 77%, 1)";
-        })
+        // hide the data tip
+        d3.select("#ttContent").style('visibility', 'hidden')
+          
+        try {
+          if ( d3.event.toElement.id == "bcSvg" || d3.event.fromElement.parentNode === d3.event.toElement.parentNode){
+            d3.event.stopPropagation();
+          }
+        }catch(ex){
+          d3.event.stopPropagation();
+        }
+ 
+    });
 
+    bar.on("mouseover", function(){
+      d3.selectAll("#bcSvg g").selectAll("rect").attr("fill", function(){
+        var hsla = d3.select(this).attr("orgHsla");
+        return modHSLA(hsla, 0, -10, -30, 0);
+      });
 
-        d3.select("#ttContent").style("visibility", "hidden");
+      hlBarNode = this;
+      d3.select(this).selectAll("rect").attr('fill', function(){
+        return d3.select(this).attr("orgHsla");
+      });
+
+      drawPieChart(d3.select(this).datum().detail);
+    });
+
+    bar.on("mouseout", function(){
+      d3.selectAll("#bcSvg g").selectAll("rect")
+      .attr("fill", function(){
+        return d3.select(this).attr("orgHsla");
+      });
+    
     });
 
     //Create labels
@@ -353,22 +382,30 @@
         .attr("fill", "white");*/
   };
 
-  var drawPieChart = function(data){
-    var m = 10,
-    r = 200,
-    z = d3.scale.category20c(),
-    data = [[11975,  5871, 8916, 2868]];
+  var drawPieChart = function(detail){
+    var z = d3.scale.category20c();
+    var data = [[]];
 
-    d3.select("body")
-      .append("svg")
-      .attr("width", (r + m) * 2 )
-      .attr("height", (r + m) * 2 )
-      .append("g")
-      .data(data)
-      .attr("transform", "translate(" + (r + m) + "," + (r + m) + ")")
-      .selectAll("path")
-      .data(d3.layout.pie())
-      .enter().append("path")
+    for(var key in detail){
+      var datum = {};
+      datum[key] = detail[key];
+      data[0].push(datum);
+    }
+
+    var path = pcSvg
+                .data(data)
+                .selectAll("path")
+                .data(d3.layout.pie().value(function(datum, i){
+                  return datum[Object.keys(datum)[0]]
+                }));
+                
+                
+    //  if path element not created yet
+    if(pcSvg.selectAll("path").empty()){
+      path = path.enter().append("path");
+    }
+      
+    path
       .attr("d", d3.svg.arc().innerRadius(0).outerRadius(r))
       .style("fill", function(d, i) { 
         return z(i); 
@@ -383,7 +420,18 @@
           .style('left', d3.event.pageX + "px")
           .style('top', d3.event.pageY + 8 + "px")
           .style('visibility', 'visible')
-          .text(JSON.stringify(d3.select(this).data()));
+          .text(JSON.stringify(d3.select(this).datum()));
+
+
+        d3.selectAll("#bcSvg g").selectAll("rect").attr("fill", function(){
+          var hsla = d3.select(this).attr("orgHsla");
+          return modHSLA(hsla, 0, -10, -30, 0);
+        });
+
+        d3.select(hlBarNode).selectAll("rect").attr('fill', function(){
+          return d3.select(this).attr("orgHsla");
+        });
+
       })
       // mouse out event
       .on('mouseout', function(d, i) {
@@ -410,5 +458,5 @@
   });
 
   generateBarChart(dataset);
-  drawPieChart();
+  
 </script>
